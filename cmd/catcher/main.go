@@ -1,25 +1,78 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"github.com/SergeyMalinovskiy/growther/cmd/catcher/repositories"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
+
+	_ "github.com/lib/pq"
 )
 
 var defaultMessageHandler mqtt.MessageHandler = func(client mqtt.Client, message mqtt.Message) {
 	fmt.Printf("mqtt: Received message: %s from topic: %s\n", message.Payload(), message.Topic())
 }
 
+const (
+	host   = "localhost"
+	port   = "5439"
+	user   = "growth_monitor"
+	pass   = "growth_monitor"
+	dbname = "growth_monitor"
+)
+
 func main() {
 	fmt.Println("Catcher init...")
 
+	loadConfig()
+	db := configureDatabase()
+	defer dbClose(db)
+
+	sensorRepository := repositories.NewSensorRepository(db)
+
+	exists := sensorRepository.SensorExists(2)
+
+	fmt.Println(exists)
+
+	//runWatchProcess()
+}
+
+func loadConfig() {
 	err := godotenv.Load()
 	if err != nil {
 		log.Fatalf("Error loading .env file. %v", err.Error())
 	}
+}
 
+func configureDatabase() *sql.DB {
+	pqSqlInfo := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		host,
+		port,
+		pass,
+		user,
+		dbname,
+	)
+
+	db, err := sql.Open("postgres", pqSqlInfo)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return db
+}
+
+func dbClose(db *sql.DB) {
+	err := db.Close()
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runWatchProcess() {
 	host := os.Getenv("MQTT_BROKER_HOST")
 	port := os.Getenv("MQTT_BROKER_PORT")
 
