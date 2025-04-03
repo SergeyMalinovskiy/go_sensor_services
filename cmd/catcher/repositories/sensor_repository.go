@@ -6,7 +6,7 @@ import (
 )
 
 type CanReceiveSensorData interface {
-	SensorExists(sensorId int) bool
+	Exists(sensorId int) bool
 }
 
 type SensorRepository struct {
@@ -19,7 +19,7 @@ func NewSensorRepository(db *sql.DB) SensorRepository {
 	}
 }
 
-func (repos SensorRepository) SensorExists(sensorId int) bool {
+func (repos SensorRepository) Exists(sensorId int) bool {
 	query := `SELECT count(*) FROM sensors WHERE id=$1`
 	rows, err := repos.db.Query(query, sensorId)
 	if err != nil {

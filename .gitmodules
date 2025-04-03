@@ -1,0 +1,3 @@
+[submodule "libs/contract"]
+	path = libs/contract
+	url = git@github.com:SergeyMalinovskiy/sensor-service-contract.git

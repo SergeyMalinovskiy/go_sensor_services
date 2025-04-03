@@ -4,17 +4,12 @@ import (
 	"database/sql"
 	"fmt"
 	"github.com/SergeyMalinovskiy/growther/cmd/catcher/repositories"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/joho/godotenv"
 	"log"
 	"os"
 
 	_ "github.com/lib/pq"
 )
-
-var defaultMessageHandler mqtt.MessageHandler = func(client mqtt.Client, message mqtt.Message) {
-	fmt.Printf("mqtt: Received message: %s from topic: %s\n", message.Payload(), message.Topic())
-}
 
 const (
 	host   = "localhost"
@@ -31,13 +26,7 @@ func main() {
 	db := configureDatabase()
 	defer dbClose(db)
 
-	sensorRepository := repositories.NewSensorRepository(db)
-
-	exists := sensorRepository.SensorExists(2)
-
-	fmt.Println(exists)
-
-	//runWatchProcess()
+	runWatchProcess(db)
 }
 
 func loadConfig() {
@@ -72,39 +61,23 @@ func dbClose(db *sql.DB) {
 	}
 }
 
-func runWatchProcess() {
+func runWatchProcess(db *sql.DB) {
 	host := os.Getenv("MQTT_BROKER_HOST")
 	port := os.Getenv("MQTT_BROKER_PORT")
 
 	mqttClient := mqttClientInit(host, port)
 
-	fmt.Println("Connecting...")
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal(token.Error())
-	}
+	listener := NewMqttListener(
+		mqttClient,
+	)
 
-	select {}
-}
+	catcher := NewCatcher(
+		listener,
+		repositories.NewMeasurementRepository(db),
+		repositories.NewSensorRepository(db),
+	)
 
-func mqttClientInit(host string, port string) mqtt.Client {
-	opts := mqtt.NewClientOptions().AddBroker(fmt.Sprintf("tcp://%s:%s", host, port))
+	catcher.RegisterHandlers()
 
-	opts.SetClientID("go_mqtt_client_id")
-	opts.SetDefaultPublishHandler(defaultMessageHandler)
-
-	opts.OnConnect = func(client mqtt.Client) {
-		fmt.Println("Connected to MQTT broker")
-
-		if token := client.Subscribe("test/#", 0, nil); token.Wait() && token.Error() != nil {
-			log.Fatalf("Subscribe channel error: %v", token.Error())
-		}
-
-		fmt.Println("Subscribed to topic: \"test/#\"")
-	}
-
-	opts.OnConnectionLost = func(client mqtt.Client, err error) {
-		fmt.Printf("Connection lost: %v\n", err)
-	}
-
-	return mqtt.NewClient(opts)
+	catcher.RunCatch()
 }

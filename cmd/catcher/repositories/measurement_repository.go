@@ -2,19 +2,14 @@ package repositories
 
 import (
 	"database/sql"
-	"log"
+	"errors"
+	"fmt"
+	contract "github.com/SergeyMalinovskiy/growther/libs/contract/golang"
 	"time"
 )
 
-type MeasurementData struct {
-	value      float32
-	valueExtra string
-	sensorId   int
-	date       time.Time
-}
-
 type MeasurementSaver interface {
-	Save(data MeasurementData) int
+	Save(data contract.MeasurementData) (int, error)
 }
 
 type CountDbResult struct {
@@ -25,9 +20,15 @@ type MeasurementRepository struct {
 	db *sql.DB
 }
 
-func (MeasurementRepository) Save(data MeasurementData) int {
+func (repos MeasurementRepository) Save(
+	data contract.MeasurementData,
+) (int, error) {
+	err := repos.insertData(data)
+	if err != nil {
+		return 0, errors.New(fmt.Sprintf("Measurement repository: save error: %v", err))
+	}
 
-	return 0
+	return 1, nil
 }
 
 func NewMeasurementRepository(db *sql.DB) MeasurementRepository {
@@ -36,17 +37,16 @@ func NewMeasurementRepository(db *sql.DB) MeasurementRepository {
 	}
 }
 
-func (repos MeasurementRepository) insertData(data MeasurementData) {
+func (repos MeasurementRepository) insertData(data contract.MeasurementData) error {
 	query := `INSERT INTO measurements (value, value_extra, sensor_id, date, created_at) VALUES ($1, $2, $3, $4, $5)`
 	_, err := repos.db.Exec(
 		query,
-		data.value,
-		data.valueExtra,
-		data.sensorId,
-		data.date.String(),
+		data.Value,
+		sql.NullString{String: data.ValueExtra, Valid: data.ValueExtra != ""},
+		data.SensorId,
+		data.Datetime,
 		time.Now(),
 	)
-	if err != nil {
-		log.Fatal(err)
-	}
+
+	return err
 }
